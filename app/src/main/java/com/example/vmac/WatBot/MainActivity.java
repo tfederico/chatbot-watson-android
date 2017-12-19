@@ -34,7 +34,6 @@ import com.ibm.watson.developer_cloud.conversation.v1.model.MessageRequest;
 import com.ibm.watson.developer_cloud.conversation.v1.model.MessageResponse;
 import com.ibm.watson.developer_cloud.speech_to_text.v1.SpeechToText;
 import com.ibm.watson.developer_cloud.speech_to_text.v1.model.RecognizeOptions;
-import com.ibm.watson.developer_cloud.speech_to_text.v1.model.SpeakerLabel;
 import com.ibm.watson.developer_cloud.speech_to_text.v1.model.SpeechResults;
 import com.ibm.watson.developer_cloud.speech_to_text.v1.websocket.RecognizeCallback;
 import com.ibm.watson.developer_cloud.text_to_speech.v1.TextToSpeech;
@@ -55,7 +54,7 @@ public class MainActivity extends AppCompatActivity {
 
     private RecyclerView recyclerView;
     private ChatAdapter mAdapter;
-    private ArrayList messageArrayList;
+    private ArrayList<Message> messageArrayList;
     private EditText inputMessage;
     private ImageButton btnSend;
     private ImageButton btnRecord;
@@ -79,7 +78,6 @@ public class MainActivity extends AppCompatActivity {
     private String STT_password;
     private String TTS_username;
     private String TTS_password;
-    private String analytics_APIKEY;
     private SpeakerLabelsDiarization.RecoTokens recoTokens;
     private MicrophoneHelper microphoneHelper;
 
@@ -98,50 +96,20 @@ public class MainActivity extends AppCompatActivity {
         STT_password = mContext.getString(R.string.STT_password);
         TTS_username = mContext.getString(R.string.TTS_username);
         TTS_password = mContext.getString(R.string.TTS_password);
-        analytics_APIKEY = mContext.getString(R.string.mobileanalytics_apikey);
 
-
-        //Bluemix Mobile Analytics
-        BMSClient.getInstance().initialize(getApplicationContext(), BMSClient.REGION_US_SOUTH);
-        //Analytics is configured to record lifecycle events.
-        Analytics.init(getApplication(), "WatBot", analytics_APIKEY, false, Analytics.DeviceEvent.ALL);
-        //Analytics.send();
         myLogger = Logger.getLogger("myLogger");
         // Send recorded usage analytics to the Mobile Analytics Service
-        Analytics.send(new ResponseListener() {
-            @Override
-            public void onSuccess(Response response) {
-                // Handle Analytics send success here.
-            }
 
-            @Override
-            public void onFailure(Response response, Throwable throwable, JSONObject jsonObject) {
-                // Handle Analytics send failure here.
-            }
-        });
-
-        // Send logs to the Mobile Analytics Service
-        Logger.send(new ResponseListener() {
-            @Override
-            public void onSuccess(Response response) {
-                // Handle Logger send success here.
-            }
-
-            @Override
-            public void onFailure(Response response, Throwable throwable, JSONObject jsonObject) {
-                // Handle Logger send failure here.
-            }
-        });
-
-        inputMessage = (EditText) findViewById(R.id.message);
-        btnSend = (ImageButton) findViewById(R.id.btn_send);
-        btnRecord= (ImageButton) findViewById(R.id.btn_record);
+        inputMessage = findViewById(R.id.message);
+        btnSend = findViewById(R.id.btn_send);
+        btnRecord= findViewById(R.id.btn_record);
         String customFont = "Montserrat-Regular.ttf";
         Typeface typeface = Typeface.createFromAsset(getAssets(), customFont);
         inputMessage.setTypeface(typeface);
-        recyclerView = (RecyclerView) findViewById(R.id.recycler_view);
+        recyclerView = findViewById(R.id.recycler_view);
 
         messageArrayList = new ArrayList<>();
+
         mAdapter = new ChatAdapter(messageArrayList);
         microphoneHelper = new MicrophoneHelper(this);
 
@@ -177,7 +145,7 @@ public class MainActivity extends AppCompatActivity {
                         Message audioMessage;
                         try {
 
-                            audioMessage =(Message) messageArrayList.get(position);
+                            audioMessage = messageArrayList.get(position);
                             streamPlayer = new StreamPlayer();
                             if(audioMessage != null && !audioMessage.getMessage().isEmpty())
                                 //Change the Voice format and choose from the available choices
@@ -214,7 +182,7 @@ public class MainActivity extends AppCompatActivity {
                 recordMessage();
             }
         });
-    };
+    }
 
     // Speech-to-Text Record Audio permission
     @Override
@@ -295,32 +263,29 @@ public class MainActivity extends AppCompatActivity {
 
                     }
                     Message outMessage=new Message();
-                    if(response!=null)
+                    if(response.getOutput()!=null && response.getOutput().containsKey("text"))
                     {
-                        if(response.getOutput()!=null && response.getOutput().containsKey("text"))
-                        {
 
-                            ArrayList responseList = (ArrayList) response.getOutput().get("text");
-                            if(null !=responseList && responseList.size()>0){
-                                outMessage.setMessage((String)responseList.get(0));
-                                outMessage.setId("2");
-                            }
-                            messageArrayList.add(outMessage);
+                        ArrayList responseList = (ArrayList) response.getOutput().get("text");
+                        if(null !=responseList && responseList.size()>0){
+                            outMessage.setMessage((String)responseList.get(0));
+                            outMessage.setId("2");
                         }
+                        messageArrayList.add(outMessage);
+                    }
 
-                        runOnUiThread(new Runnable() {
-                            public void run() {
-                                mAdapter.notifyDataSetChanged();
-                                if (mAdapter.getItemCount() > 1) {
-                                    recyclerView.getLayoutManager().smoothScrollToPosition(recyclerView, null, mAdapter.getItemCount()-1);
-
-                                }
+                    runOnUiThread(new Runnable() {
+                        public void run() {
+                            mAdapter.notifyDataSetChanged();
+                            if (mAdapter.getItemCount() > 1) {
+                                recyclerView.getLayoutManager().smoothScrollToPosition(recyclerView, null, mAdapter.getItemCount()-1);
 
                             }
-                        });
+
+                        }
+                    });
 
 
-                    }
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -338,7 +303,7 @@ public class MainActivity extends AppCompatActivity {
         speechService.setUsernameAndPassword(STT_username, STT_password);
 
 
-        if(listening != true) {
+        if(!listening) {
             capture = microphoneHelper.getInputStream(true);
             new Thread(new Runnable() {
                 @Override public void run() {
@@ -373,7 +338,10 @@ public class MainActivity extends AppCompatActivity {
         ConnectivityManager cm =
                 (ConnectivityManager)getSystemService(Context.CONNECTIVITY_SERVICE);
 
-        NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
+        NetworkInfo activeNetwork = null;
+        if (cm != null) {
+            activeNetwork = cm.getActiveNetworkInfo();
+        }
         boolean isConnected = activeNetwork != null &&
                 activeNetwork.isConnectedOrConnecting();
 
@@ -440,11 +408,6 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public void onListening() {
-
-        }
-
-        @Override
-        public void onTranscriptionComplete() {
 
         }
     }
